@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LMS Portal{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome CDN for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" xintegrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0V4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Custom font for a sleek look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+    <nav class="bg-white shadow-sm py-4 px-6 md:px-12 flex justify-between items-center">
+        <a href="{% url 'dashboard' %}" class="text-2xl font-bold text-indigo-600 flex items-center">
+            <i class="fas fa-graduation-cap mr-2"></i> LMS Portal
+        </a>
+        <div>
+            {% if user.is_authenticated %}
+                <span class="text-gray-700 mr-4 hidden md:inline">Hello, {{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition duration-300 flex items-center justify-center md:inline-flex">
+                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                </a>
+            {% else %}
+                <a href="{% url 'login' %}" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-300 mr-2 flex items-center justify-center md:inline-flex">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Login
+                </a>
+                <a href="{% url 'register' %}" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition duration-300 flex items-center justify-center md:inline-flex">
+                    <i class="fas fa-user-plus mr-2"></i> Register
+                </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="flex-grow container mx-auto p-4 md:p-8">
+        {% if messages %}
+            <div class="mb-4">
+                {% for message in messages %}
+                    <div class="p-3 rounded-md {% if message.tags == 'success' %}bg-green-100 text-green-700{% elif message.tags == 'error' %}bg-red-100 text-red-700{% else %}bg-blue-100 text-blue-700{% endif %} flex items-center">
+                        {% if message.tags == 'success' %}<i class="fas fa-check-circle mr-2"></i>
+                        {% elif message.tags == 'error' %}<i class="fas fa-exclamation-circle mr-2"></i>
+                        {% else %}<i class="fas fa-info-circle mr-2"></i>{% endif %}
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-white shadow-inner py-4 text-center text-gray-600">
+        &copy; 2025 LMS Portal. All rights reserved.
+    </footer>
+</body>
+</html>
