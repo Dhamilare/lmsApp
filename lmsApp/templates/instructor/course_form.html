@@ -1,4 +1,4 @@
-<!-- core/templates/core/course_form.html (Updated with Font Awesome) -->
+<!-- core/templates/core/course_form.html (Updated with Back Button) -->
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
@@ -17,13 +17,11 @@
                 <i class="fas fa-save mr-2"></i> Save Course
             </button>
         </form>
-        {% if form.instance.pk %}
-        <p class="text-center text-gray-600 mt-4">
-            <a href="{% url 'course_detail' slug=form.instance.slug %}" class="text-indigo-600 hover:underline flex items-center justify-center">
-                <i class="fas fa-arrow-left mr-2"></i> Back to Course Details
+        <div class="mt-6 text-center">
+            <a href="{% url 'dashboard' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
             </a>
-        </p>
-        {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
