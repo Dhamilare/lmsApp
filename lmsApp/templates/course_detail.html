@@ -1,7 +1,7 @@
-<!-- core/templates/core/course_detail.html (Sleek Card Design) -->
+<!-- core/templates/core/course_detail.html (Fix TemplateSyntaxError) -->
 {% extends 'base.html' %}
 {% load static %}
-{% load custom_filters %} {# Load your custom filter here #}
+{% load custom_filters %}
 
 {% block title %}{{ course.title }}{% endblock %}
 
@@ -30,6 +30,18 @@
                 <button onclick="loadModalForm('{% url 'course_delete' slug=course.slug %}')" class="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300 flex items-center shadow-md hover:shadow-lg">
                     <i class="fas fa-trash-alt mr-2"></i> Delete Course
                 </button>
+            </div>
+        {% elif request.user.is_student and course.is_published %}
+            <div class="mt-4 md:mt-0">
+                {% if is_enrolled %}
+                    <span class="bg-green-500 text-white py-2 px-4 rounded-md flex items-center shadow-md">
+                        <i class="fas fa-check-circle mr-2"></i> Enrolled
+                    </span>
+                {% else %}
+                    <button onclick="enrollCourse('{% url 'enroll_course' slug=course.slug %}')" class="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition duration-300 flex items-center shadow-md hover:shadow-lg">
+                        <i class="fas fa-hand-point-right mr-2"></i> Enroll in Course
+                    </button>
+                {% endif %}
             </div>
         {% endif %}
     </div>
@@ -75,10 +87,19 @@
                         <ul class="space-y-3">
                             {% for lesson in module.lessons.all %}
                                 <li class="bg-white p-4 rounded-md shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center transform hover:scale-[1.02] transition duration-200 ease-in-out">
-                                    <a href="{% url 'content_detail' course_slug=course.slug module_id=module.id lesson_id=lesson.id content_id=lesson.contents.first.id %}" class="flex items-center text-gray-700 font-medium hover:text-indigo-600 mb-2 md:mb-0">
-                                        <i class="fas fa-play-circle text-indigo-500 mr-3 text-lg"></i>
-                                        Lesson {{ lesson.order }}: {{ lesson.title }}
-                                    </a>
+                                    {# Only allow access to content if can_access_content is True #}
+                                    {% if can_access_content %}
+                                        <a href="{% if lesson.contents.first %}{% url 'content_detail' course_slug=course.slug module_id=module.id lesson_id=lesson.id content_id=lesson.contents.first.id %}{% else %}#{% endif %}" class="flex items-center text-gray-700 font-medium hover:text-indigo-600 mb-2 md:mb-0">
+                                            <i class="fas fa-play-circle text-indigo-500 mr-3 text-lg"></i>
+                                            Lesson {{ lesson.order }}: {{ lesson.title }}
+                                        </a>
+                                    {% else %}
+                                        <span class="flex items-center text-gray-500 font-medium cursor-not-allowed">
+                                            <i class="fas fa-lock mr-3 text-gray-400 text-lg"></i>
+                                            Lesson {{ lesson.order }}: {{ lesson.title }}
+                                        </span>
+                                    {% endif %}
+
                                     {% if request.user.is_instructor and course.instructor == request.user %}
                                         <div class="flex flex-wrap space-x-2 space-y-2 md:space-y-0">
                                             <button onclick="loadModalForm('{% url 'content_create' course_slug=course.slug module_id=module.id lesson_id=lesson.id %}')" class="bg-purple-500 text-white text-xs py-1 px-2 rounded-md hover:bg-purple-600 transition duration-300 flex items-center shadow-sm hover:shadow-md">
@@ -93,7 +114,7 @@
                                         </div>
                                     {% endif %}
                                 </li>
-                                {% if lesson.contents.all %}
+                                {% if lesson.contents.all and can_access_content %} {# Use can_access_content here #}
                                     <ul class="ml-8 mt-1 space-y-1 border-l-2 border-gray-200 pl-4">
                                         {% for content_item in lesson.contents.all %}
                                             <li class="flex justify-between items-center text-sm text-gray-600 bg-gray-100 p-2 rounded-md hover:bg-gray-200 transition duration-150 ease-in-out">
@@ -120,7 +141,9 @@
                                             </li>
                                         {% endfor %}
                                     </ul>
-                                {% else %}
+                                {% elif request.user.is_student and not is_enrolled %} {# Specific message for non-enrolled students #}
+                                    <p class="text-gray-500 text-sm ml-8 flex items-center"><i class="fas fa-lock mr-2"></i> Enroll to view content.</p>
+                                {% else %} {# Fallback for other cases (e.g., instructor not owning course, or no content) #}
                                     <p class="text-gray-500 text-sm ml-8 flex items-center"><i class="fas fa-info-circle mr-2"></i> No content in this lesson yet.</p>
                                     {% if request.user.is_instructor and course.instructor == request.user %}
                                         <div class="ml-8 mt-2">
@@ -150,20 +173,50 @@
         {% if request.user.is_instructor and course.instructor == request.user %}
             <p class="mt-4 text-gray-600 flex items-center"><i class="fas fa-lightbulb mr-2"></i> Start by adding your first module!</p>
             <div class="mt-2">
-                <button onclick="loadModalForm('{% url 'module_create' course_slug=course.slug %}')" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-300 flex items-center w-fit shadow-md hover:shadow-lg">
+                <button onclick="loadModalForm('{% url 'module_create' course_slug=course.slug %}')" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-300 flex items-center w-fit shadow-sm hover:shadow-lg">
                     <i class="fas fa-plus mr-1"></i> Add Module
                 </button>
             </div>
         {% endif %}
     {% endif %}
 
-    <!-- Placeholder for enrollment button for students -->
-    {% if request.user.is_student %}
-        <div class="mt-8 text-center">
-            <button class="bg-green-600 text-white py-3 px-8 rounded-md hover:bg-green-700 transition duration-300 text-lg font-semibold flex items-center justify-center mx-auto shadow-lg hover:shadow-xl">
-                <i class="fas fa-hand-point-right mr-2"></i> Enroll in Course
-            </button>
-        </div>
-    {% endif %}
+    <div class="mt-8 text-center">
+        <a href="{% url 'dashboard' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+        </a>
+    </div>
 </div>
+
+<script>
+    async function enrollCourse(url) {
+        const confirmed = confirm("Are you sure you want to enroll in this course?");
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') // Ensure CSRF token is sent
+                },
+                body: JSON.stringify({}) // Send an empty JSON body
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                displayMessage('success', result.message || 'Enrollment successful!');
+                window.location.reload(); // Reload to update UI (e.g., button changes to "Enrolled")
+            } else {
+                displayMessage('error', result.error || 'Enrollment failed.');
+            }
+        } catch (error) {
+            console.error('Error during enrollment:', error);
+            displayMessage('error', 'An error occurred during enrollment.');
+        }
+    }
+</script>
 {% endblock content %}

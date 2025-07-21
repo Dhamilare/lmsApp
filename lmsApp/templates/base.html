@@ -1,4 +1,4 @@
-<!-- core/templates/core/base.html (Updated for Responsive Modal) -->
+<!-- core/templates/core/base.html (Responsive Enhancements) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,28 +26,28 @@
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
-    <nav class="bg-white shadow-sm py-4 px-6 md:px-12 flex justify-between items-center">
-        <a href="{% url 'dashboard' %}" class="text-2xl font-bold text-indigo-600 flex items-center">
+    <nav class="bg-white shadow-sm py-4 px-4 md:px-8 lg:px-12 flex justify-between items-center">
+        <a href="{% url 'dashboard' %}" class="text-xl md:text-2xl font-bold text-indigo-600 flex items-center">
             <i class="fas fa-graduation-cap mr-2"></i> LMS Portal
         </a>
-        <div>
+        <div class="flex items-center space-x-2 md:space-x-4">
             {% if user.is_authenticated %}
-                <span class="text-gray-700 mr-4 hidden md:inline">Hello, {{ user.username }}</span>
-                <a href="{% url 'logout' %}" class="bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition duration-300 flex items-center justify-center md:inline-flex">
-                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                <span class="text-gray-700 text-sm md:text-base hidden md:inline">Hello, {{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="bg-red-500 text-white py-1.5 px-3 md:py-2 md:px-4 rounded-md hover:bg-red-600 transition duration-300 flex items-center justify-center text-sm md:text-base">
+                    <i class="fas fa-sign-out-alt mr-1 md:mr-2"></i> <span class="hidden md:inline">Logout</span>
                 </a>
             {% else %}
-                <a href="{% url 'login' %}" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-300 mr-2 flex items-center justify-center md:inline-flex">
-                    <i class="fas fa-sign-in-alt mr-2"></i> Login
+                <a href="{% url 'login' %}" class="bg-indigo-600 text-white py-1.5 px-3 md:py-2 md:px-4 rounded-md hover:bg-indigo-700 transition duration-300 text-sm md:text-base flex items-center justify-center">
+                    <i class="fas fa-sign-in-alt mr-1 md:mr-2"></i> <span class="hidden md:inline">Login</span>
                 </a>
-                <a href="{% url 'register' %}" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition duration-300 flex items-center justify-center md:inline-flex">
-                    <i class="fas fa-user-plus mr-2"></i> Register
+                <a href="{% url 'register' %}" class="bg-gray-200 text-gray-800 py-1.5 px-3 md:py-2 md:px-4 rounded-md hover:bg-gray-300 transition duration-300 text-sm md:text-base flex items-center justify-center">
+                    <i class="fas fa-user-plus mr-1 md:mr-2"></i> <span class="hidden md:inline">Register</span>
                 </a>
             {% endif %}
         </div>
     </nav>
 
-    <main class="flex-grow container mx-auto p-4 md:p-8">
+    <main class="flex-grow container mx-auto p-4 md:p-8 max-w-screen-xl"> {# Added max-w-screen-xl here #}
         {% if messages %}
             <div id="messages-container" class="mb-4">
                 {% for message in messages %}

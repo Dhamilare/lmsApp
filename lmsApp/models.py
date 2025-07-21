@@ -117,3 +117,130 @@ class Content(models.Model):
     class Meta:
         ordering = ['order']
         unique_together = ('lesson', 'order')
+
+class Enrollment(models.Model):
+    """
+    Represents a student's enrollment in a course.
+    """
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='enrollments', limit_choices_to={'is_student': True})
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    completed = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('student', 'course')
+        ordering = ['-enrolled_at']
+
+    def __str__(self):
+        return f"{self.student.username} enrolled in {self.course.title}"
+
+class StudentContentProgress(models.Model):
+    """
+    Tracks a student's progress on individual content items within a course.
+    """
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='content_progress', limit_choices_to={'is_student': True})
+    content = models.ForeignKey(Content, on_delete=models.CASCADE, related_name='student_progress')
+    completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('student', 'content')
+        verbose_name = "Student Content Progress"
+        verbose_name_plural = "Student Content Progress"
+
+    def save(self, *args, **kwargs):
+        if self.completed and not self.completed_at:
+            self.completed_at = timezone.now()
+        elif not self.completed and self.completed_at:
+            self.completed_at = None 
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        status = "Completed" if self.completed else "Incomplete"
+        return f"{self.student.username} - {self.content.title} ({status})"
+    
+
+# --- Quiz Models ---
+
+class Quiz(models.Model):
+    """
+    Represents a quiz. Can be linked to a Content object of type 'quiz'.
+    """
+    lesson = models.OneToOneField(Lesson, on_delete=models.CASCADE, related_name='quiz', null=True, blank=True,
+                                  help_text="Optional: Link this quiz to a specific lesson. If linked, a 'quiz' content type should point to this quiz.")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    duration_minutes = models.PositiveIntegerField(default=0, help_text="Duration of the quiz in minutes (0 for no time limit).")
+    pass_percentage = models.PositiveIntegerField(default=70, help_text="Minimum percentage required to pass the quiz.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        verbose_name_plural = "Quizzes"
+
+class Question(models.Model):
+    """
+    Represents a question within a quiz.
+    """
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
+    text = models.TextField()
+    order = models.PositiveIntegerField(default=0, help_text="Order of the question within the quiz.")
+    # Future: Add question types (e.g., 'multiple_choice', 'true_false', 'short_answer')
+
+    def __str__(self):
+        return f"Q{self.order}: {self.text[:50]}..."
+
+    class Meta:
+        ordering = ['order']
+        unique_together = ('quiz', 'order')
+
+class Option(models.Model):
+    """
+    Represents an answer option for a multiple-choice question.
+    """
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='options')
+    text = models.CharField(max_length=255)
+    is_correct = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.text} ({'Correct' if self.is_correct else 'Incorrect'})"
+
+    class Meta:
+        unique_together = ('question', 'text') # Option text must be unique per question
+
+class StudentQuizAttempt(models.Model):
+    """
+    Tracks a student's attempt on a specific quiz.
+    """
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts', limit_choices_to={'is_student': True})
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='attempts')
+    score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Score as a percentage (e.g., 85.50).")
+    passed = models.BooleanField(default=False)
+    attempt_date = models.DateTimeField(auto_now_add=True)
+    # Future: Add start_time, end_time for timed quizzes
+
+    def __str__(self):
+        status = "Passed" if self.passed else "Failed"
+        return f"{self.student.username} - {self.quiz.title} ({self.score or 'N/A'}% - {status})"
+
+    class Meta:
+        ordering = ['-attempt_date']
+        # Consider unique_together if only one attempt is allowed, or add attempt_number
+
+class StudentAnswer(models.Model):
+    """
+    Stores a student's chosen answer for a specific question within a quiz attempt.
+    """
+    attempt = models.ForeignKey(StudentQuizAttempt, on_delete=models.CASCADE, related_name='answers')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='student_answers')
+    chosen_option = models.ForeignKey(Option, on_delete=models.CASCADE, null=True, blank=True, related_name='chosen_by_students')
+    # Future: Add text_answer for short answer questions
+
+    def __str__(self):
+        return f"{self.attempt.student.username}'s answer for {self.question.text[:30]}..."
+
+    class Meta:
+        unique_together = ('attempt', 'question') # A student can only answer a question once per attempt

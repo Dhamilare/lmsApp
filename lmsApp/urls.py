@@ -2,8 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('register/', views.student_register, name='register'),
-    path('login/', views.user_login, name='login'),
+    path('accounts/register/', views.student_register, name='register'),
+    path('accounts/login/', views.user_login, name='login'),
     path('logout/', views.user_logout, name='logout'),
     path('', views.dashboard, name='dashboard'),
 
@@ -21,6 +21,10 @@ urlpatterns = [
 
     # Course Detail and Content Management
     path('courses/<slug:slug>/', views.course_detail, name='course_detail'),
+    path('courses/<slug:slug>/enroll/', views.enroll_course, name='enroll_course'),
+
+    # Progress Tracking
+    path('courses/<slug:course_slug>/modules/<int:module_id>/lessons/<int:lesson_id>/contents/<int:content_id>/mark-completed/', views.mark_content_completed, name='mark_content_completed'),
 
     # Module Management (Nested under course)
     path('courses/<slug:course_slug>/modules/create/', views.module_create, name='module_create'),
