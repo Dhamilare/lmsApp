@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+import uuid
 
 class User(AbstractUser):
     """
@@ -244,3 +245,24 @@ class StudentAnswer(models.Model):
 
     class Meta:
         unique_together = ('attempt', 'question') # A student can only answer a question once per attempt
+
+
+class Certificate(models.Model):
+    """
+    Represents a certificate of completion issued to a student for a course.
+    """
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='certificates', limit_choices_to={'is_student': True})
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='certificates')
+    issue_date = models.DateField(auto_now_add=True)
+    # Unique identifier for the certificate, useful for verification
+    certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    pdf_file = models.FileField(upload_to='certificates/', blank=True, null=True)
+
+    class Meta:
+        unique_together = ('student', 'course')
+        ordering = ['-issue_date']
+
+    def __str__(self):
+        return f"Certificate for {self.student.username} - {self.course.title} (Issued: {self.issue_date})"
+    
+

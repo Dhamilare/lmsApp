@@ -4,11 +4,17 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.db import transaction
-from django.http import JsonResponse
-from django.template.loader import render_to_string
+from django.http import JsonResponse, HttpResponse
+from django.template.loader import render_to_string, get_template
 from django.db.models import Q, Max
 from .forms import *
 from .models import *
+from io import BytesIO
+from xhtml2pdf import pisa
+from django.conf import settings
+import os
+import traceback
+from .utils import send_templated_email
 
 # Helper functions for role-based access control
 def is_admin(user):
@@ -170,7 +176,7 @@ def instructor_update(request, pk):
     Admin view to update an instructor's details.
     """
     instructor = get_object_or_404(User, pk=pk, is_instructor=True)
-    template_name = 'admin/_instructor_form.html' if is_ajax(request) else 'core/instructor_form.html'
+    template_name = 'admin/_instructor_form.html' if is_ajax(request) else 'admin/_instructor_form.html'
 
     if request.method == 'POST':
         form = InstructorUpdateForm(request.POST, instance=instructor)
@@ -196,7 +202,7 @@ def instructor_delete(request, pk):
     Admin view to delete an instructor.
     """
     instructor = get_object_or_404(User, pk=pk, is_instructor=True)
-    template_name = 'admin/_confirm_delete.html' if is_ajax(request) else 'core/confirm_delete.html'
+    template_name = 'admin/_confirm_delete.html' if is_ajax(request) else 'admin/_confirm_delete.html'
 
     if request.method == 'POST':
         if instructor == request.user: # Prevent admin from deleting themselves
@@ -652,12 +658,13 @@ def content_detail(request, course_slug, module_id, lesson_id, content_id):
     return render(request, 'content_detail.html', context)
 
 @login_required
-@user_passes_test(is_student)
+@user_passes_test(is_student) # Only students can enroll
 def enroll_course(request, slug):
     """
     Allows a student to enroll in a course.
     """
     course = get_object_or_404(Course, slug=slug)
+    student = request.user
 
     if not course.is_published:
         if is_ajax(request):
@@ -665,7 +672,7 @@ def enroll_course(request, slug):
         messages.error(request, 'Cannot enroll in an unpublished course.')
         return redirect('course_detail', slug=course.slug)
 
-    if Enrollment.objects.filter(student=request.user, course=course).exists():
+    if Enrollment.objects.filter(student=student, course=course).exists():
         if is_ajax(request):
             return JsonResponse({'success': False, 'error': 'You are already enrolled in this course.'}, status=400)
         messages.info(request, 'You are already enrolled in this course.')
@@ -673,13 +680,32 @@ def enroll_course(request, slug):
 
     try:
         with transaction.atomic():
-            Enrollment.objects.create(student=request.user, course=course)
+            enrollment = Enrollment.objects.create(student=student, course=course)
             messages.success(request, f'Successfully enrolled in "{course.title}"!')
+
+            # --- Send Enrollment Confirmation Email ---
+            email_subject = f"Enrollment Confirmation: {course.title}"
+            email_context = {
+                'student_name': student.get_full_name() or student.username,
+                'course_title': course.title,
+                'instructor_name': course.instructor.get_full_name() or course.instructor.username,
+                'enrollment_date': enrollment.enrolled_at,
+                'course_url': request.build_absolute_uri(course.get_absolute_url()),
+            }
+            send_templated_email(
+                'emails/enrollment_confirmation.html',
+                email_subject,
+                [student.email],
+                email_context
+            )
+            # --- End Email Send ---
+
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': f'Successfully enrolled in "{course.title}"!', 'redirect_url': str(redirect('course_detail', slug=course.slug).url)})
             return redirect('course_detail', slug=course.slug)
     except Exception as e:
         messages.error(request, f'Failed to enroll in course: {e}')
+        traceback.print_exc() # Print full traceback to console
         if is_ajax(request):
             return JsonResponse({'success': False, 'error': f'Failed to enroll in course: {e}'}, status=500)
         return redirect('course_detail', slug=course.slug)
@@ -891,3 +917,161 @@ def quiz_result(request, course_slug, module_id, lesson_id, content_id, attempt_
         'questions_with_answers': questions_with_answers,
     }
     return render(request, 'student/quiz_result.html', context)
+
+
+@login_required
+@user_passes_test(is_student)
+def issue_certificate(request, course_slug):
+    """
+    Allows a student to claim/issue a certificate for a completed course.
+    Generates and saves the PDF, then sends a completion email with the PDF.
+    """
+    course = get_object_or_404(Course, slug=course_slug)
+    student = request.user
+
+    # Basic checks
+    enrollment = get_object_or_404(Enrollment, student=student, course=course)
+
+    if not enrollment.completed:
+        messages.error(request, "You must complete the course to claim a certificate.")
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'error': 'Course not completed.'}, status=400)
+        return redirect('dashboard')
+
+    if Certificate.objects.filter(student=student, course=course).exists():
+        messages.info(request, "You have already claimed a certificate for this course.")
+        certificate = Certificate.objects.get(student=student, course=course)
+        
+        # --- Send Completion Email (if not already sent or if re-issuing) ---
+        # You might want logic here to prevent re-sending if already sent.
+        # For simplicity, we'll send it again if they click "Claim" and it exists.
+        # Or, just redirect without sending if already claimed.
+        # For now, let's just redirect if already claimed and not re-send email.
+        if is_ajax(request):
+            return JsonResponse({'success': True, 'message': 'Certificate already claimed.', 'redirect_url': str(redirect('view_certificate', certificate_id=certificate.certificate_id).url)})
+        return redirect('view_certificate', certificate_id=certificate.certificate_id)
+
+
+    try:
+        with transaction.atomic():
+            certificate = Certificate.objects.create(
+                student=student,
+                course=course,
+            )
+
+            # --- PDF Generation Logic ---
+            template_path = 'student/certificate_template.html'
+            context = {
+                'certificate': certificate,
+                'student_name': student.get_full_name() or student.username,
+                'course_title': course.title,
+                'instructor_name': course.instructor.get_full_name() or course.instructor.username,
+                'issue_date': certificate.issue_date,
+                'certificate_id': certificate.certificate_id,
+                'request': request, # Pass request to access build_absolute_uri in template
+            }
+            template = get_template(template_path)
+            html = template.render(context)
+
+            result_file = BytesIO()
+            def link_callback(uri, rel):
+                if uri.startswith(settings.MEDIA_URL):
+                    path = os.path.join(settings.MEDIA_ROOT, uri.replace(settings.MEDIA_URL, ""))
+                elif uri.startswith(settings.STATIC_URL):
+                    path = os.path.join(settings.BASE_DIR, 'static', uri.replace(settings.STATIC_URL, ""))
+                    if not os.path.exists(path): # Fallback for collected static files
+                         path = os.path.join(settings.STATIC_ROOT, uri.replace(settings.STATIC_URL, ""))
+                else:
+                    path = uri # Assume it's a direct path or external URL
+                return path
+
+            pisa_status = pisa.CreatePDF(
+                html,
+                dest=result_file,
+                link_callback=link_callback
+            )
+
+            if pisa_status.err:
+                raise Exception(f"PDF generation error: {pisa_status.err}")
+
+            # Save the PDF to the Certificate model's FileField
+            file_name = f'certificate_{certificate.certificate_id}.pdf'
+            certificate.pdf_file.save(file_name, result_file)
+            certificate.save()
+            # --- End PDF Generation Logic ---
+
+            messages.success(request, f'Congratulations! Your certificate for "{course.title}" has been issued and sent to your email.')
+            
+            # --- Send Course Completion Email with PDF Attachment ---
+            email_subject = f"Congratulations! You've Completed {course.title}!"
+            email_context = {
+                'student_name': student.get_full_name() or student.username,
+                'course_title': course.title,
+                'completion_date': certificate.issue_date, # Use certificate issue date as completion date
+                'certificate_url': request.build_absolute_uri(certificate.get_absolute_url()), # Link to view certificate online
+            }
+            
+            # Prepare PDF attachment
+            pdf_attachment = (
+                f"{course.title}_Certificate_{certificate.certificate_id}.pdf",
+                certificate.pdf_file.read(), # Read binary content of the saved PDF
+                'application/pdf'
+            )
+
+            send_templated_email(
+                'emails/course_completion.html',
+                email_subject,
+                [student.email],
+                email_context,
+                attachments=[pdf_attachment]
+            )
+            # --- End Email Send ---
+
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Certificate issued!', 'redirect_url': str(redirect('view_certificate', certificate_id=certificate.certificate_id).url)})
+            return redirect('view_certificate', certificate_id=certificate.certificate_id)
+    except Exception as e:
+        messages.error(request, f'Failed to issue certificate: {e}')
+        traceback.print_exc() # Print full traceback to console
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'error': f'Failed to issue certificate: {e}'}, status=500)
+        return redirect('dashboard')
+
+@login_required
+@user_passes_test(is_student)
+def view_certificate(request, certificate_id):
+    """
+    Displays the certificate of completion for a student, serving the PDF if available.
+    """
+    certificate = get_object_or_404(Certificate, certificate_id=certificate_id, student=request.user)
+
+    # If a PDF file exists, serve it directly
+    if certificate.pdf_file and certificate.pdf_file.name:
+        try:
+            # Ensure the file exists on disk before trying to open it
+            if os.path.exists(certificate.pdf_file.path):
+                with open(certificate.pdf_file.path, 'rb') as pdf:
+                    response = HttpResponse(pdf.read(), content_type='application/pdf')
+                    # Use 'inline' to display in browser, 'attachment' to force download
+                    response['Content-Disposition'] = f'inline; filename="{certificate.course.title}_Certificate_{certificate.certificate_id}.pdf"'
+                    return response
+            else:
+                messages.warning(request, "PDF file not found on server. Rendering HTML version.")
+                # Fallback to HTML rendering if PDF file is missing
+        except Exception as e:
+            messages.error(request, f"Error serving PDF: {e}. Rendering HTML version.")
+            import traceback
+            print(f"Error serving PDF: {e}\n{traceback.format_exc()}")
+            # Fallback to HTML rendering on error
+    
+    # Fallback to rendering HTML template if no PDF or error serving PDF
+    context = {
+        'certificate': certificate,
+        'student_name': certificate.student.get_full_name() or certificate.student.username,
+        'course_title': certificate.course.title,
+        'instructor_name': certificate.course.instructor.get_full_name() or certificate.course.instructor.username,
+        'issue_date': certificate.issue_date,
+        'certificate_id': certificate.certificate_id,
+        'request': request, # Pass request to access build_absolute_uri in template
+    }
+    return render(request, 'student/certificate_template.html', context)

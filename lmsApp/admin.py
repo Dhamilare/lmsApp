@@ -118,3 +118,11 @@ class StudentAnswerAdmin(admin.ModelAdmin):
     list_filter = ('attempt__quiz', 'question__quiz')
     search_fields = ('attempt__student__username', 'question__text', 'chosen_option__text')
     raw_id_fields = ('attempt', 'question', 'chosen_option')
+
+@admin.register(Certificate)
+class CertificateAdmin(admin.ModelAdmin):
+    list_display = ('student', 'course', 'issue_date', 'certificate_id', 'pdf_file')
+    list_filter = ('issue_date', 'course', 'student')
+    search_fields = ('student__username', 'course__title', 'certificate_id')
+    readonly_fields = ('issue_date', 'certificate_id')
+    raw_id_fields = ('student', 'course')

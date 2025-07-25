@@ -26,6 +26,10 @@ urlpatterns = [
     # Progress Tracking
     path('courses/<slug:course_slug>/modules/<int:module_id>/lessons/<int:lesson_id>/contents/<int:content_id>/mark-completed/', views.mark_content_completed, name='mark_content_completed'),
 
+    # Certificate Functionality (NEW)
+    path('courses/<slug:course_slug>/issue-certificate/', views.issue_certificate, name='issue_certificate'),
+    path('certificates/<uuid:certificate_id>/view/', views.view_certificate, name='view_certificate'),
+
     # Module Management (Nested under course)
     path('courses/<slug:course_slug>/modules/create/', views.module_create, name='module_create'),
     path('courses/<slug:course_slug>/modules/<int:module_id>/edit/', views.module_update, name='module_update'),

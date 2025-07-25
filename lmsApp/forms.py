@@ -1,11 +1,12 @@
-# core/forms.py (Updated for Modules, Lessons, Content)
+# core/forms.py (Instructor is_staff=False Corrected)
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm, UserChangeForm
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit, Field, Div, HTML
-from .models import User, Course, Module, Lesson, Content
+from .models import *
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
+from django.forms import inlineformset_factory
 
 class StudentRegistrationForm(forms.ModelForm):
     """
@@ -125,7 +126,7 @@ class InstructorCreationForm(UserCreationForm):
         user = super().save(commit=False)
         user.is_instructor = True # Set new user as instructor
         user.is_student = False # Ensure they are not students
-        user.is_staff = False # Ensure they are not admins
+        user.is_staff = False # Corrected: Instructors are NOT staff/admin
         if commit:
             user.save()
         return user
@@ -288,3 +289,86 @@ class ContentForm(forms.ModelForm):
             cleaned_data['video_url'] = None
         
         return cleaned_data
+    
+
+# --- Quiz Forms ---
+
+class OptionForm(forms.ModelForm):
+    """
+    Form for individual answer options within a question.
+    """
+    class Meta:
+        model = Option
+        fields = ['text', 'is_correct']
+        widgets = {
+            'text': forms.TextInput(attrs={'class': 'form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50'}),
+            'is_correct': forms.CheckboxInput(attrs={'class': 'form-checkbox h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500'}),
+        }
+
+# Inline formset for Options within a Question
+OptionFormSet = inlineformset_factory(
+    Question,
+    Option,
+    form=OptionForm,
+    extra=4,  # Number of empty forms to display
+    min_num=2, # Minimum number of options required
+    max_num=4, # Maximum number of options allowed
+    validate_min=True,
+    can_delete=False, # Options should not be deleted independently in quiz creation
+    labels={
+        'text': 'Option Text',
+        'is_correct': 'Is Correct?'
+    }
+)
+
+class QuestionForm(forms.ModelForm):
+    """
+    Form for individual quiz questions.
+    """
+    class Meta:
+        model = Question
+        fields = ['text', 'order']
+        widgets = {
+            'text': forms.Textarea(attrs={'class': 'form-textarea mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50', 'rows': 3}),
+            'order': forms.NumberInput(attrs={'class': 'form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50'}),
+        }
+
+# Inline formset for Questions within a Quiz
+QuestionFormSet = inlineformset_factory(
+    Quiz,
+    Question,
+    form=QuestionForm,
+    extra=1, # Number of empty forms to display
+    min_num=1, # Minimum number of questions required
+    validate_min=True,
+    can_delete=True,
+    labels={
+        'text': 'Question Text',
+        'order': 'Order'
+    }
+)
+
+class QuizForm(forms.Form):
+    """
+    A dynamic form for taking a quiz.
+    It generates fields based on the questions associated with a given Quiz instance.
+    """
+    def __init__(self, *args, **kwargs):
+        self.quiz = kwargs.pop('quiz', None)
+        super().__init__(*args, **kwargs)
+
+        if not self.quiz:
+            raise ValueError("Quiz instance must be provided to QuizForm.")
+
+        for question in self.quiz.questions.all().order_by('order'):
+            # Create a list of (value, label) tuples for choices
+            choices = [(option.id, option.text) for option in question.options.all()]
+            
+            # Add a RadioSelect field for each question
+            self.fields[f'question_{question.id}'] = forms.ChoiceField(
+                label=f"{question.order}. {question.text}",
+                choices=choices,
+                widget=forms.RadioSelect(attrs={'class': 'form-radio h-4 w-4 text-indigo-600'}),
+                required=True, # All questions are required to be answered
+            )
+            self.fields[f'question_{question.id}'].widget.attrs['data-question-id'] = question.id

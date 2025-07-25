@@ -1,4 +1,3 @@
-<!-- core/templates/core/dashboard.html (Enhanced Responsiveness) -->
 {% extends 'base.html' %}
 
 {% block title %}Dashboard{% endblock %}
@@ -44,7 +43,7 @@
                     <a href="{% url 'course_list' %}" class="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 transition duration-300 flex items-center justify-center text-sm shadow-sm hover:shadow-md">
                         <i class="fas fa-book-open mr-2"></i> Manage My Courses
                     </a>
-                    <span class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md flex items-center justify-center text-sm shadow-sm">
+                    <span class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md flex items-center justify-center shadow-sm">
                         <i class="fas fa-tasks mr-2"></i> View Student Submissions (coming soon)
                     </span>
                 </div>
@@ -113,6 +112,12 @@
                             </div>
                         </div>
                     </form>
+                    <span class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md flex items-center justify-center shadow-sm text-sm">
+                        <i class="fas fa-list-alt mr-2"></i> My Enrolled Courses (coming soon)
+                    </span>
+                    <span class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md flex items-center justify-center shadow-sm">
+                        <i class="fas fa-chart-pie mr-2"></i> View Progress (coming soon)
+                    </span>
                 </div>
             </div>
         </div>
@@ -132,6 +137,7 @@
                                 <span class="flex items-center"><i class="fas fa-user mr-1 sm:mr-2"></i> Instructor: {{ enrollment.course.instructor.get_full_name|default:enrollment.course.instructor.username }}</span>
                                 <span class="flex items-center"><i class="fas fa-calendar-alt mr-1 sm:mr-2"></i> Enrolled: {{ enrollment.enrolled_at|date:"M d, Y" }}</span>
                             </div>
+                            {# Progress Bar (Confirmed to be here!) #}
                             <div class="flex items-center justify-between mt-2">
                                 <div class="w-full bg-gray-200 rounded-full h-2.5">
                                     <div class="bg-indigo-600 h-2.5 rounded-full" style="width: {{ enrollment.progress_percentage }}%;"></div>
@@ -143,9 +149,29 @@
                                     {% if enrollment.completed %}bg-green-100 text-green-800{% else %}bg-blue-100 text-blue-800{% endif %}">
                                     {% if enrollment.completed %}<i class="fas fa-check-double mr-1"></i> Completed{% else %}<i class="fas fa-spinner fa-spin mr-1"></i> In Progress{% endif %}
                                 </span>
-                                <a href="{% url 'course_detail' slug=enrollment.course.slug %}" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center text-sm">
-                                    Go to Course <i class="fas fa-arrow-right ml-1 sm:ml-2"></i>
-                                </a>
+                                {# Certificate Buttons (NEW) #}
+                                {% if enrollment.completed %}
+                                    {% if enrollment.has_certificate %}
+                                        <a href="{% url 'view_certificate' certificate_id=enrollment.certificate_obj.certificate_id %}" target="_blank" class="text-green-600 hover:text-green-800 font-medium flex items-center text-sm">
+                                            View Certificate <i class="fas fa-award ml-1 sm:ml-2"></i>
+                                        </a>
+                                    {% elif enrollment.can_claim_certificate %}
+                                        <form method="post" action="{% url 'issue_certificate' course_slug=enrollment.course.slug %}" class="inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="bg-yellow-500 text-white py-1.5 px-3 rounded-md hover:bg-yellow-600 transition duration-300 flex items-center text-xs sm:text-sm">
+                                                <i class="fas fa-certificate mr-1 sm:mr-2"></i> Claim Certificate
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <a href="{% url 'course_detail' slug=enrollment.course.slug %}" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center text-sm">
+                                            Go to Course <i class="fas fa-arrow-right ml-1 sm:ml-2"></i>
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    <a href="{% url 'course_detail' slug=enrollment.course.slug %}" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center text-sm">
+                                        Go to Course <i class="fas fa-arrow-right ml-1 sm:ml-2"></i>
+                                    </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
