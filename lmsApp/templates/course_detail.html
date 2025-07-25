@@ -1,7 +1,7 @@
-<!-- core/templates/core/course_detail.html (Fix TemplateSyntaxError) -->
+<!-- core/templates/core/course_detail.html (TemplateSyntaxError Fix) -->
 {% extends 'base.html' %}
 {% load static %}
-{% load custom_filters %}
+{% load custom_filters %} {# Assuming custom_filters are defined if you use them elsewhere #}
 
 {% block title %}{{ course.title }}{% endblock %}
 
@@ -16,8 +16,8 @@
             <div class="flex flex-wrap items-center text-gray-500 text-sm space-x-4">
                 <span class="flex items-center"><i class="fas fa-user-tie mr-2"></i> Instructor: <span class="font-medium text-indigo-600 ml-1">{{ course.instructor.get_full_name|default:course.instructor.username }}</span></span>
                 <span class="flex items-center"><i class="fas fa-dollar-sign mr-2"></i> Price: <span class="font-medium text-green-600 ml-1">{% if course.price %}{{ course.price }}{% else %}Free{% endif %}</span></span>
-                <span class="px-3 py-1 text-xs font-semibold rounded-full flex items-center
-                    {% if course.is_published %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                {# FIX: Corrected the class attribute for is_published status #}
+                <span class="px-3 py-1 text-xs font-semibold rounded-full flex items-center {% if course.is_published %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
                     {% if course.is_published %}<i class="fas fa-check-circle mr-1"></i> Published{% else %}<i class="fas fa-hourglass-half mr-1"></i> Draft{% endif %}
                 </span>
             </div>
@@ -46,8 +46,8 @@
         {% endif %}
     </div>
 
-    <div class="mb-8">
-        <img src="{{ course.thumbnail|default:'https://placehold.co/800x450/E0E7FF/4338CA?text=Course+Thumbnail' }}" alt="{{ course.title }} Thumbnail" class="w-full h-auto rounded-lg shadow-md object-cover">
+    <div class="mb-8 text-center">
+        <img src="{{ course.thumbnail|default:'https://placehold.co/800x450/E0E7FF/4338CA?text=Course+Thumbnail' }}" alt="{{ course.title }} Thumbnail" class="w-full md:max-w-2xl mx-auto h-auto rounded-lg shadow-md object-cover">
     </div>
 
     <h3 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
@@ -58,9 +58,9 @@
             </button>
         {% endif %}
     </h3>
-    {% if course.modules.all %}
+    {% if modules %} {# Changed from course.modules.all to modules #}
         <div class="space-y-6">
-            {% for module in course.modules.all %}
+            {% for module in modules %} {# Changed from course.modules.all to modules #}
                 <div class="bg-gray-50 p-6 rounded-lg shadow-md border border-gray-200 transform hover:scale-105 transition duration-300 ease-in-out">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-3">
                         <h4 class="text-xl font-semibold text-gray-700 flex items-center mb-2 md:mb-0">
@@ -90,7 +90,12 @@
                                     {# Only allow access to content if can_access_content is True #}
                                     {% if can_access_content %}
                                         <a href="{% if lesson.contents.first %}{% url 'content_detail' course_slug=course.slug module_id=module.id lesson_id=lesson.id content_id=lesson.contents.first.id %}{% else %}#{% endif %}" class="flex items-center text-gray-700 font-medium hover:text-indigo-600 mb-2 md:mb-0">
-                                            <i class="fas fa-play-circle text-indigo-500 mr-3 text-lg"></i>
+                                            {# Green checkmark for completed lessons (NEW) #}
+                                            {% if lesson.is_completed %}
+                                                <i class="fas fa-check-circle text-green-500 mr-3 text-lg"></i>
+                                            {% else %}
+                                                <i class="fas fa-play-circle text-indigo-500 mr-3 text-lg"></i>
+                                            {% endif %}
                                             Lesson {{ lesson.order }}: {{ lesson.title }}
                                         </a>
                                     {% else %}
@@ -114,17 +119,23 @@
                                         </div>
                                     {% endif %}
                                 </li>
-                                {% if lesson.contents.all and can_access_content %} {# Use can_access_content here #}
+                                {% if lesson.contents.all and can_access_content %}
                                     <ul class="ml-8 mt-1 space-y-1 border-l-2 border-gray-200 pl-4">
                                         {% for content_item in lesson.contents.all %}
                                             <li class="flex justify-between items-center text-sm text-gray-600 bg-gray-100 p-2 rounded-md hover:bg-gray-200 transition duration-150 ease-in-out">
                                                 <a href="{% url 'content_detail' course_slug=course.slug module_id=module.id lesson_id=lesson.id content_id=content_item.id %}" class="flex items-center hover:text-indigo-600">
-                                                    {% if content_item.content_type == 'video' %}<i class="fas fa-video mr-2 text-indigo-400"></i>
-                                                    {% elif content_item.content_type == 'pdf' %}<i class="fas fa-file-pdf mr-2 text-red-400"></i>
-                                                    {% elif content_item.content_type == 'text' %}<i class="fas fa-file-alt mr-2 text-blue-400"></i>
-                                                    {% elif content_item.content_type == 'slide' %}<i class="fas fa-file-powerpoint mr-2 text-orange-400"></i>
-                                                    {% elif content_item.content_type == 'quiz' %}<i class="fas fa-question-circle mr-2 text-green-400"></i>
-                                                    {% elif content_item.content_type == 'assignment' %}<i class="fas fa-tasks mr-2 text-purple-400"></i>
+                                                    {# Checkmark for individual content items #}
+                                                    {% if content_item.is_completed %}
+                                                        <i class="fas fa-check-square mr-2 text-green-500"></i>
+                                                    {% else %}
+                                                        {# Original icons based on content type #}
+                                                        {% if content_item.content_type == 'video' %}<i class="fas fa-video mr-2 text-indigo-400"></i>
+                                                        {% elif content_item.content_type == 'pdf' %}<i class="fas fa-file-pdf mr-2 text-red-400"></i>
+                                                        {% elif content_item.content_type == 'text' %}<i class="fas fa-file-alt mr-2 text-blue-400"></i>
+                                                        {% elif content_item.content_type == 'slide' %}<i class="fas fa-file-powerpoint mr-2 text-orange-400"></i>
+                                                        {% elif content_item.content_type == 'quiz' %}<i class="fas fa-question-circle mr-2 text-green-400"></i>
+                                                        {% elif content_item.content_type == 'assignment' %}<i class="fas fa-tasks mr-2 text-purple-400"></i>
+                                                        {% endif %}
                                                     {% endif %}
                                                     {{ content_item.title }} ({{ content_item.get_content_type_display }})
                                                 </a>
@@ -141,9 +152,9 @@
                                             </li>
                                         {% endfor %}
                                     </ul>
-                                {% elif request.user.is_student and not is_enrolled %} {# Specific message for non-enrolled students #}
+                                {% elif request.user.is_student and not is_enrolled %}
                                     <p class="text-gray-500 text-sm ml-8 flex items-center"><i class="fas fa-lock mr-2"></i> Enroll to view content.</p>
-                                {% else %} {# Fallback for other cases (e.g., instructor not owning course, or no content) #}
+                                {% else %}
                                     <p class="text-gray-500 text-sm ml-8 flex items-center"><i class="fas fa-info-circle mr-2"></i> No content in this lesson yet.</p>
                                     {% if request.user.is_instructor and course.instructor == request.user %}
                                         <div class="ml-8 mt-2">

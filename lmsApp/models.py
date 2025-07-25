@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 import uuid
+from django.urls import reverse
 
 class User(AbstractUser):
     """
@@ -57,6 +58,9 @@ class Course(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+    def get_absolute_url(self):
+        return reverse('course_detail', kwargs={'slug': self.slug})
 
 class Module(models.Model):
     """
@@ -265,4 +269,5 @@ class Certificate(models.Model):
     def __str__(self):
         return f"Certificate for {self.student.username} - {self.course.title} (Issued: {self.issue_date})"
     
-
+    def get_absolute_url(self):
+        return reverse('view_certificate', kwargs={'certificate_id': self.certificate_id})

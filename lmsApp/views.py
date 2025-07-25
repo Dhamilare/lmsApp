@@ -100,7 +100,7 @@ def dashboard(request):
     elif user.is_student:
         context['enrolled_courses'] = Enrollment.objects.filter(student=user).select_related('course').order_by('-enrolled_at')
         
-        # Calculate progress for each enrolled course
+        # Calculate progress for each enrolled course and check certificate status
         for enrollment in context['enrolled_courses']:
             total_contents = Content.objects.filter(lesson__module__course=enrollment.course).count()
             completed_contents = StudentContentProgress.objects.filter(
@@ -121,6 +121,18 @@ def dashboard(request):
                 # If progress drops below 100% (e.g., instructor adds new content), mark as incomplete
                 enrollment.completed = False
                 enrollment.save(update_fields=['completed'])
+
+            # Check for certificate availability
+            enrollment.has_certificate = False
+            enrollment.certificate_obj = None
+            if enrollment.completed:
+                certificate = Certificate.objects.filter(student=user, course=enrollment.course).first()
+                if certificate:
+                    enrollment.has_certificate = True
+                    enrollment.certificate_obj = certificate
+                else:
+                    enrollment.can_claim_certificate = True # Can claim if completed but no certificate yet
+
 
         # Course Search Logic for Students
         search_query = request.GET.get('q')
@@ -321,22 +333,36 @@ def course_detail(request, slug):
     """
     course = get_object_or_404(Course, slug=slug)
     is_enrolled = False
-    student_progress = None # Initialize student_progress
+    modules = course.modules.prefetch_related('lessons__contents').all()
+
     if request.user.is_authenticated and request.user.is_student:
         is_enrolled = Enrollment.objects.filter(student=request.user, course=course).exists()
-
+        
         student_progress_map = {
-            p.content_id: p.completed
+            p['content_id']: p['completed']
             for p in StudentContentProgress.objects.filter(
                 student=request.user,
                 content__lesson__module__course=course
-            )
+            ).values('content_id', 'completed')
         }
-        for module in course.modules.all():
-            for lesson in module.lessons.all():
-                for content_item in lesson.contents.all():
-                    content_item.is_completed = student_progress_map.get(content_item.id, False)
 
+        for module in modules: # Iterate over the pre-fetched modules
+            for lesson in module.lessons.all(): # These lessons are also pre-fetched
+                all_contents_in_lesson = list(lesson.contents.all()) # Convert to list to ensure consistent iteration
+                total_lesson_contents = len(all_contents_in_lesson)
+                
+                completed_lesson_contents = 0
+                for content_item in all_contents_in_lesson:
+                    # Check if this specific content item is completed by the student
+                    content_item.is_completed = student_progress_map.get(content_item.id, False)
+                    if content_item.is_completed:
+                        completed_lesson_contents += 1
+                
+                # A lesson is considered completed if it has content AND all its content is completed.
+                # If a lesson has no content, it's not "completed" in terms of student progress.
+                lesson.is_completed = (total_lesson_contents > 0 and completed_lesson_contents == total_lesson_contents)
+
+    # Determine if the user can access content (instructor of this course OR enrolled student)
     can_access_content = False
     if request.user.is_authenticated:
         if request.user.is_instructor and course.instructor == request.user:
@@ -344,6 +370,7 @@ def course_detail(request, slug):
         elif request.user.is_student and course.is_published and is_enrolled:
             can_access_content = True
 
+    # Access control for viewing the course detail page itself
     if request.user.is_instructor and course.instructor != request.user:
         messages.error(request, "You do not have permission to view this course.")
         return redirect('dashboard')
@@ -354,7 +381,8 @@ def course_detail(request, slug):
     context = {
         'course': course,
         'is_enrolled': is_enrolled,
-        'can_access_content': can_access_content, 
+        'can_access_content': can_access_content,
+        'modules': modules, # Pass the pre-fetched modules to the template
     }
     return render(request, 'course_detail.html', context)
 
@@ -365,7 +393,7 @@ def module_create(request, course_slug):
     Allows an instructor to add a new module to their course.
     """
     course = get_object_or_404(Course, slug=course_slug, instructor=request.user)
-    template_name = 'instructor/_module_form.html' if is_ajax(request) else 'instructor/module_form.html'
+    template_name = 'instructor/_module_form.html' if is_ajax(request) else 'instructor/_module_form.html'
 
     if request.method == 'POST':
         form = ModuleForm(request.POST)
@@ -394,7 +422,7 @@ def module_update(request, course_slug, module_id):
     """
     course = get_object_or_404(Course, slug=course_slug, instructor=request.user)
     module = get_object_or_404(Module, id=module_id, course=course)
-    template_name = 'instructor/_module_form.html' if is_ajax(request) else 'instructor/module_form.html'
+    template_name = 'instructor/_module_form.html' if is_ajax(request) else 'instructor/_module_form.html'
 
     if request.method == 'POST':
         form = ModuleForm(request.POST, instance=module)
@@ -443,7 +471,7 @@ def lesson_create(request, course_slug, module_id):
     """
     course = get_object_or_404(Course, slug=course_slug, instructor=request.user)
     module = get_object_or_404(Module, id=module_id, course=course)
-    template_name = 'instructor/_lesson_form.html' if is_ajax(request) else 'instructor/lesson_form.html'
+    template_name = 'instructor/_lesson_form.html' if is_ajax(request) else 'instructor/_lesson_form.html'
 
     if request.method == 'POST':
         form = LessonForm(request.POST)
@@ -526,7 +554,7 @@ def content_create(request, course_slug, module_id, lesson_id):
     course = get_object_or_404(Course, slug=course_slug, instructor=request.user)
     module = get_object_or_404(Module, id=module_id, course=course)
     lesson = get_object_or_404(Lesson, id=lesson_id, module=module)
-    template_name = 'instructor/_content_form.html' if is_ajax(request) else 'instructor/content_form.html'
+    template_name = 'instructor/_content_form.html' if is_ajax(request) else 'instructor/_content_form.html'
 
     if request.method == 'POST':
         form = ContentForm(request.POST, request.FILES)
