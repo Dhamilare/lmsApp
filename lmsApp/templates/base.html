@@ -26,7 +26,8 @@
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
-    <nav class="bg-white shadow-sm py-4 px-4 md:px-8 lg:px-12 flex justify-between items-center">
+    <!-- Updated navigation bar with fixed positioning -->
+    <nav class="bg-white shadow-sm py-4 px-4 md:px-8 lg:px-12 flex justify-between items-center fixed top-0 left-0 w-full z-50">
         <a href="{% url 'dashboard' %}" class="text-xl md:text-2xl font-bold text-indigo-600 flex items-center">
             <i class="fas fa-graduation-cap mr-2"></i> LMS Portal
         </a>
@@ -47,7 +48,8 @@
         </div>
     </nav>
 
-    <main class="flex-grow container mx-auto p-4 md:p-8 max-w-screen-xl"> {# Added max-w-screen-xl here #}
+    <!-- Main content area, adjusted with top padding to prevent content from being hidden by the fixed navbar -->
+    <main class="flex-grow container mx-auto p-4 md:p-8 max-w-screen-xl mt-16">
         {% if messages %}
             <div id="messages-container" class="mb-4">
                 {% for message in messages %}
